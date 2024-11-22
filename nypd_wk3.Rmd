@@ -1,0 +1,169 @@
+---
+title: "Analysis of NYPD Shooting Incidents"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## Question of Interest
+
+The question of interest for this analysis is: **How have the shooting incidents in New York City varied over time, are there significant differences in the number of shootings across different boroughs, and can the month predict the number of daily shootings?** 
+
+This report aims to visualize trends and patterns in shooting incidents using the NYPD dataset and fit a statistical model to the data.
+
+## Dataset Source
+
+We will use a dataset from the NYPD. The source is https://data.cityofnewyork.us/api/views/833y-fsy8
+
+## Load Necessary Libraries
+
+```{r}
+library(ggplot2)
+library(magrittr)
+library(lubridate)
+library(dplyr)
+```
+
+## Load the Dataset
+
+For the purposes of this analysis, we will load the dataset from a specified local file path.
+
+```{r}
+fpath <- "data/shootings.csv" # Update the path as necessary
+nypd_data <- read.csv(fpath)
+```
+
+## Clean and Prepare the Data
+
+To ensure the accuracy of our analysis, we will filter out any missing values and convert the `OCCUR_DATE` to a Date format.
+
+```{r}
+nypd_data <- nypd_data %>%
+  filter(!is.na(OCCUR_DATE)) %>%
+  mutate(SHOOTING_DATE = as.Date(OCCUR_DATE, format="%m/%d/%Y"))
+```
+
+## Preview the Data
+
+Let's take a look at the columns and first few rows of the data to understand its structure.
+
+```{r}
+names(nypd_data)
+```
+
+```{r}
+head(nypd_data)
+```
+
+
+## Visualization 1: Shootings Over Time
+
+```{r}
+nypd_data %>%
+  group_by(SHOOTING_DATE) %>%
+  summarise(Count = n()) %>%
+  ggplot(aes(x = SHOOTING_DATE, y = Count)) +
+  geom_line() +
+  labs(title = "Number of Shootings Over Time", x = "Date", y = "Number of Shootings")
+```
+
+### Commentary
+
+The first visualization illustrates the number of shooting incidents over time, allowing us to identify any upward or downward trends. We see that shootings have a cyclical pattern with spikes in shootings occurring about every 3 months.
+
+
+## Visualization 2: Shootings by Borough
+
+```{r}
+nypd_data %>%
+  group_by(BORO) %>%
+  summarise(Count = n()) %>%
+  ggplot(aes(x = reorder(BORO, -Count), y = Count)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Number of Shootings by Borough", x = "Borough", y = "Number of Shootings")
+```
+
+### Commentary
+
+The second visualization displays the number of shootings by borough. This analysis helps to reveal which areas may be experiencing higher levels of violence. We have big differences in shootings by city, with Brooklyn highest and Staten Island lowest.
+
+
+## Model Daily Shooting Count by Month
+
+We will model daily shooting count by month in the following segments.
+
+```{r}
+
+# Group by SHOOTING_DATE and summarize shooting counts
+daily_counts <- nypd_data %>%
+  group_by(SHOOTING_DATE) %>%
+  summarise(SHOOTING_COUNT = n(), .groups = 'drop')  # Group by day
+
+# Add a month factor
+daily_counts <- daily_counts %>%
+  mutate(Month = factor(month(SHOOTING_DATE)))  # Use abbreviated month names
+
+head(daily_counts)
+dim(daily_counts)
+```
+
+## Fit a Linear Model
+
+```{r}
+
+model <- lm(SHOOTING_COUNT ~ Month, data = daily_counts)
+summary(model)
+```
+
+### Commentary on the Model
+
+We will fit a linear model to explore the relationship between the number of shootings daily and the month of the year. This model will help us understand if the number of shootings can be predicted by month. We see that April - December treatments are significant predictors in predicting daily shootings. However, R squared of 0.07 shows low performance of the model, suggesting the need for extra predictor.
+
+
+## Visualization of model
+
+```{r}
+# Subset the first 100 rows of the data
+subset_data <- daily_counts[1:100, ]
+
+# Extract actual values (observed) and fitted values (predicted) for the first 100 rows
+actual_values <- subset_data$SHOOTING_COUNT
+fitted_values <- predict(model, newdata = subset_data)
+
+# Create an index for the x-axis (1 to 100)
+index <- 1:100
+
+# Plot actual vs fitted values with index on the x-axis
+plot(index, actual_values, 
+     main = "Actual vs Fitted Values (First 100 Observations)", 
+     xlab = "Index (Row Number)", 
+     ylab = "Values", 
+     pch = 19, col = "blue", 
+     xlim = c(0, 100), ylim = range(c(actual_values, fitted_values)))
+
+# Add the fitted values as red points
+points(index, fitted_values, col = "red", pch = 19)
+
+# Optionally, add a dashed line for the fitted values
+lines(index, fitted_values, col = "red", lty = 2)
+```
+
+### Commentary on the Visualization
+
+We observe a visualization of actual (blue) vs predicted (red) values.
+We see that month alone does not effectively predict shootings.
+However, there does appear to be some clustering by month given the data.
+Extra predictor(s) would be needed for better model.
+
+## Conclusion and Potential Biases
+
+In conclusion, the analysis highlights the trends in shooting incidents across New York City over time and uncovers significant differences between various boroughs. We fit a linear regression model using month as a factor and observed that April - December treatments are significant predictors in predicting daily shootings.
+
+### Possible Sources of Bias
+
+1. **Underreporting**: The dataset may not capture all incidents, particularly in neighborhoods with less engagement with law enforcement.
+
+2. **Socioeconomic Factors**: Certain boroughs could experience higher shootings due to socioeconomic inequalities and resource distribution leading to disparities in public safety.
+
+3. **Data Collection Issues**: Variations in how incidents are reported by police may also influence the dataset's integrity. For example, if multiple shooters are involved, how is the data reported?
+
+Further investigations and more detailed datasets could improve our understanding and lead to more informed conclusions regarding gun violence in New York City.
